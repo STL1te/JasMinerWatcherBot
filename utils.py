@@ -1,33 +1,47 @@
 import os.path
 import sqlite3
 import json
+import math
+
 from datetime import datetime
 from telebot import types
 
-from config import DB_PATH, MINER_DATA_PATH
+from config import DB_PATH, MINER_DATA_PATH, DEVICES_PER_PAGE
 from jasminer_api import JasMinerApi
-
-
-class MenuTypes:
-    MAIN_MENU = 0
-    STATS = 1
-    ADD_DEVICE = 2
 
 
 def db_connect():
     return sqlite3.connect(DB_PATH)
 
 
-def create_menu_simple(type_menu):
+def create_main_menu():
     markup = types.InlineKeyboardMarkup()
 
-    if type_menu == MenuTypes.MAIN_MENU:
-        markup.add(types.InlineKeyboardButton(text='Статистика', callback_data='stats'))
-        markup.add(types.InlineKeyboardButton(text='Устройства', callback_data='dev_list'))
+    markup.add(types.InlineKeyboardButton(text='Статистика', callback_data='stats:0'))
+    markup.add(types.InlineKeyboardButton(text='Устройства', callback_data='dev_list'))
 
-    if type_menu == MenuTypes.STATS:
-        markup.add(types.InlineKeyboardButton(text='Обновить', callback_data='update_stats'))
-        markup.add(types.InlineKeyboardButton(text='Вернуться в главное меню ↩', callback_data='main_menu'))
+    return markup
+
+
+def create_stats_menu(user_id, page):
+    markup = types.InlineKeyboardMarkup()
+
+    devices, pages = get_devices_pages_total(user_id)
+
+    if pages > 1:
+        page_buttons = []
+
+        if page > 0:
+            page_buttons.append(types.InlineKeyboardButton(text='<', callback_data=f'update_stats:{page - 1}'))
+
+        if page < pages - 1:
+            page_buttons.append(types.InlineKeyboardButton(text='>', callback_data=f'update_stats:{page + 1}'))
+
+        if len(page_buttons):
+            markup.row(*page_buttons)
+
+    markup.add(types.InlineKeyboardButton(text='Обновить', callback_data=f'update_stats:{page}'))
+    markup.add(types.InlineKeyboardButton(text='Вернуться в главное меню ↩', callback_data='main_menu'))
 
     return markup
 
@@ -48,9 +62,21 @@ def create_devices_menu(user_id):
     return markup
 
 
+def get_devices_pages_total(user_id):
+    with db_connect() as connect:
+        sql = """SELECT COUNT(*) FROM devices WHERE userId = (?)"""
+        select_db = connect.cursor().execute(sql, (user_id,))
+        total_devices = select_db.fetchone()[0]
+
+    total_pages = math.ceil(total_devices / DEVICES_PER_PAGE)
+
+    return total_devices, total_pages
+
+
 def check_device(host, user, password):
     api = JasMinerApi(host, user, password)
     return api.is_connected
+
 
 def add_device(user_id, name, host, user, password):
     if check_device(host, user, password):
@@ -71,7 +97,7 @@ def remove_device(user_id, dev_id):
         connect.commit()
 
 
-def get_stats_message(user_id):
+def get_stats_message(user_id, page):
     message = datetime.now().strftime("%d.%m.%y %H:%M:%S\n\n")
 
     if not os.path.exists(MINER_DATA_PATH):
@@ -81,8 +107,10 @@ def get_stats_message(user_id):
     with open(MINER_DATA_PATH, 'r') as f:
         miners_data = json.load(f)
 
+    offset = page * DEVICES_PER_PAGE
+
     with db_connect() as connect:
-        sql = """SELECT id, minerName FROM devices WHERE userId = (?)"""
+        sql = f"""SELECT id, minerName FROM devices WHERE userId = (?) LIMIT {DEVICES_PER_PAGE} OFFSET {offset}"""
         select_db = connect.cursor().execute(sql, (user_id,))
 
         for miner_id, minerName in select_db.fetchall():
@@ -91,7 +119,7 @@ def get_stats_message(user_id):
             message += f'<b>{minerName}</b>\n'
 
             if miner_data is None:
-                message += 'Stats not available!'
+                message += 'Статистика недоступна!'
             else:
                 # message += f"<b>Model:</b> {miner_data['minerModel']}\n"
                 # message += f"<b>Firmware</b>: {miner_data['firmwareVersion']}\n"

@@ -1,11 +1,11 @@
-import traceback
 import telebot
 from telebot import custom_filters
 from telebot.handler_backends import State, StatesGroup
 
 from config import BOT_TOKEN, BOT_OWNER_ID
-from utils import MenuTypes, get_stats_message, create_menu_simple,\
-    create_devices_menu, add_device, remove_device, check_device
+from utils import get_stats_message,\
+    create_main_menu, create_devices_menu, create_stats_menu,\
+    add_device, remove_device, check_device
 
 bot = telebot.TeleBot(BOT_TOKEN)
 bot.enable_saving_states()
@@ -29,7 +29,7 @@ def check_user_access(message):
 def menu(message):
     if not check_user_access(message):
         return
-    bot.send_message(message.chat.id, "Главное меню 📄", reply_markup=create_menu_simple(MenuTypes.MAIN_MENU))
+    bot.send_message(message.chat.id, "Главное меню 📄", reply_markup=create_main_menu())
 
 
 @bot.message_handler(state="*", commands=["cancel"])
@@ -103,12 +103,13 @@ def callback_inline(call):
 
     if call.data == 'main_menu':
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Главное меню",
-                              reply_markup=create_menu_simple(MenuTypes.MAIN_MENU))
+                              reply_markup=create_main_menu())
 
-    if call.data in ('stats', 'update_stats'):
-        stats_message = get_stats_message(call.message.chat.id)
+    if 'stats' in call.data:
+        _, page = call.data.split(':')
+        stats_message = get_stats_message(call.message.chat.id, int(page))
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=stats_message,
-                              parse_mode='HTML', reply_markup=create_menu_simple(MenuTypes.STATS))
+                              parse_mode='HTML', reply_markup=create_stats_menu(call.message.chat.id, int(page)))
 
     if call.data == 'dev_list':
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Устройства",

@@ -1,0 +1,28 @@
+version: '2'
+
+services:
+
+  _main_image_build:
+    image: stl1te/jasminer_watch_bot
+    build: .
+
+  bot:
+    image: stl1te/jasminer_watch_bot
+    depends_on:
+      - _main_image_build
+    restart: always
+    volumes:
+      - shared-data:/src/shared
+    command: python main.py
+
+  updates:
+    image: stl1te/jasminer_watch_bot
+    depends_on:
+      - _main_image_build
+    restart: always
+    volumes:
+      - shared-data:/src/shared
+    command: python updater.py
+
+volumes:
+  shared-data:

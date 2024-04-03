@@ -54,8 +54,9 @@ class JasMiner(object):
         fans = []
 
         for i in range(fan_num):
-            key_rpm = f'fan{i}'
-            key_percent = f'fan_percent{i}'
+            fan_idx = i + 1
+            key_rpm = f'fan{fan_idx}'
+            key_percent = f'fan_percent{fan_idx}'
             rpm = boards.get(key_rpm, 0)
             percent = boards.get(key_percent, '0')
 
